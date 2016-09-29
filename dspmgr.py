@@ -60,6 +60,8 @@ def buildOpt(key, val):
     r = ['--{}'.format(key)]
     if type(val) == str:
         r.append(val)
+    elif type(val) == int:
+        r.append(str(val))
     return r
 
 
