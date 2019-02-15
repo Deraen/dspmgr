@@ -3,7 +3,7 @@
 #
 from subprocess import Popen, PIPE
 
-from re import search
+from re import search, match
 from yaml import load
 
 config = load(open('.config/displays.yaml', 'r'))
@@ -37,21 +37,53 @@ def getInfo():
     return (connected, active, disabled)
 
 
+def match_config(c, connected):
+    matched_config = dict()
+    for key, val in c.items():
+        if 'match' in val:
+            found = False
+            for name in connected:
+                if match(val['match'], name):
+                    found = True
+                    new_config = val.copy()
+                    new_config.pop('match')
+                    new_config['name'] = name
+                    matched_config[key] = new_config
+                    print('Matched ', val['match'], name)
+
+            if not found:
+                return
+        else:
+            val['name'] = key
+            matched_config[key] = val
+
+    return matched_config
+
+
 def select(connected):
     print('Connected', connected)
     for c in config['displays']:
-        enabled = set([x for x, y in c.items()])
+        matched_config = match_config(c, connected)
+        if not matched_config:
+            break
+
+        enabled = set([y['name'] for x, y in matched_config.items()])
         print('Checking config', enabled)
         if connected == enabled:
-            return c
+            return matched_config
 
     # If no config fully matched
-    # Find first config which can be used (don't care if there are unconfigured outputs connected)
+    # Find first config which can be used (don't care if there are
+    # unconfigured outputs connected)
     for c in config['displays']:
-        enabled = set([x for x, y in c.items() if y is not False])
+        matched_config = match_config(c, connected)
+        if not matched_config:
+            break
+
+        enabled = set([y['name'] for x, y in matched_config.items() if y is not False])
         print('Checking config for partial match', enabled)
         if enabled.issubset(connected):
-            return c
+            return matched_config
 
     return
 
@@ -68,10 +100,15 @@ def buildOpt(key, val):
 def build(connected, active, disabled, selected):
     print('Connected', connected)
 
-    enable = set([x for x, y in selected.items() if y is not False])
+    name_to_key = dict()
+    for k, v in selected.items():
+        name_to_key[v['name']] = k
+
+    enable = set([y['name'] for x, y in selected.items() if y is not False])
 
     # Disable active outputs that we aren't going to use
     disable = active - enable
+
     print('Disable', disable)
 
     print('Enable', enable)
@@ -98,11 +135,21 @@ def build(connected, active, disabled, selected):
             current.remove(name)
         elif enable:
             name = enable.pop()
-            config = selected[name]
+            key = name_to_key[name]
+            config = selected[key]
 
             command += ['--output', name]
 
             for x, y in config.items():
+                if x == 'name':
+                    continue
+
+                if type(y) == dict:
+                    if 'name' in y:
+                        y = selected[y['name']]['name']
+                    else:
+                        raise 'Bad config value', y
+
                 # If this monitor is positioned relative to another
                 # and another monitor isn't activated yet, delay positioning
                 if x in ['right-of', 'left-of', 'top-of', 'bottom-of'] and y not in set(current):

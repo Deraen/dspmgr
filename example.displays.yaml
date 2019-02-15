@@ -22,3 +22,14 @@ displays:
   DVI-I-1:
     mode: 2560x1200
     right-of: DVI-D-0
+
+- eDP-1:
+    auto: yes
+    dpi: 144
+    # Refer to name matched by DP property
+    left-of:
+      name: DP
+  DP:
+    # DP-4, DP-2-2 etc.
+    match: ^DP-\d[\d-]*$
+    auto: yes

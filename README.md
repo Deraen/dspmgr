@@ -7,6 +7,8 @@ Script to automatically switch displaymodes (xrandr, multiple monitors)
 - Keep one display always enabled
   - i3 will close there is no active output
   - generally this might be problem when you dock laptop and disable laptops display and enable two external monitors
+- Match displays by regex
+  - Refer to matched name from `right-of` etc. options
 
 ## Usage
 
