@@ -140,6 +140,22 @@ def build(connected, active, disabled, selected):
 
             command += ['--output', name]
 
+            if config.get('disable-if-lid-closed', False):
+                lid_state_file = open('/proc/acpi/button/lid/LID/state')
+                lid_closed = False
+
+                try:
+                    lid_state = lid_state_file.read()
+                    lid_closed = 'closed' in lid_state
+                finally:
+                    lid_state_file.close()
+
+                if lid_closed:
+                    command += ['--off']
+                    continue
+
+                config.pop('disable-if-lid-closed')
+
             for x, y in config.items():
                 if x == 'name':
                     continue
