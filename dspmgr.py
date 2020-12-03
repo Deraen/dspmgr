@@ -1,25 +1,34 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
 from subprocess import Popen, PIPE
+from pathlib import Path
+import os
 
 from re import search, match
-from yaml import load
+from yaml import load as load_yaml, SafeLoader
 
-config = load(open('.config/displays.yaml', 'r'))
+config_home = os.environ.get('XDG_CONFIG_HOME')
+if config_home:
+    config_home_path = Path(config_home)
+else:
+    config_home_path = Path(os.path.expandvars("$HOME"), '.config')
+
+config = load_yaml(Path(config_home_path, 'displays.yaml').open('r'), Loader=SafeLoader)
 maxdisplays = config['maxdisplays']
 
 
 def getInfo():
-    output = Popen('xrandr', stdout=PIPE).communicate()[0].strip().split('\n')
+    out, _errs = Popen('xrandr', stdout=PIPE, text=True).communicate()
+    output = out.strip().split('\n')
 
     connected = set()
     active = set()
     disabled = set()
 
     for line in output:
-        status = search('(?P<name>[\w-]*) (?P<status>\w*)', line)
-        info = search('(?P<w>\d+)x(?P<h>\d+)\+(?P<x>\d+)\+(?P<y>\d+) (?P<rotate>inverted|left|right|)', line)
+        status = search(r'(?P<name>[\w-]*) (?P<status>\w*)', line)
+        info = search(r'(?P<w>\d+)x(?P<h>\d+)\+(?P<x>\d+)\+(?P<y>\d+) (?P<rotate>inverted|left|right|)', line)
         name = status.group('name')
         if status.group('status') == 'connected':
             connected.add(name)
@@ -52,7 +61,7 @@ def match_config(c, connected):
                     print('Matched ', val['match'], name)
 
             if not found:
-                return
+                return None
         else:
             val['name'] = key
             matched_config[key] = val
@@ -67,7 +76,7 @@ def select(connected):
         if not matched_config:
             break
 
-        enabled = set([y['name'] for x, y in matched_config.items()])
+        enabled = {y['name'] for x, y in matched_config.items()}
         print('Checking config', enabled)
         if connected == enabled:
             return matched_config
@@ -80,7 +89,7 @@ def select(connected):
         if not matched_config:
             break
 
-        enabled = set([y['name'] for x, y in matched_config.items() if y is not False])
+        enabled = {y['name'] for x, y in matched_config.items() if y is not False}
         print('Checking config for partial match', enabled)
         if enabled.issubset(connected):
             return matched_config
@@ -104,7 +113,7 @@ def build(connected, active, disabled, selected):
     for k, v in selected.items():
         name_to_key[v['name']] = k
 
-    enable = set([y['name'] for x, y in selected.items() if y is not False])
+    enable = {y['name'] for x, y in selected.items() if y is not False}
 
     # Disable active outputs that we aren't going to use
     disable = active - enable
@@ -164,7 +173,7 @@ def build(connected, active, disabled, selected):
                     if 'name' in y:
                         y = selected[y['name']]['name']
                     else:
-                        raise 'Bad config value', y
+                        raise 'Bad config value %s' % y
 
                 # If this monitor is positioned relative to another
                 # and another monitor isn't activated yet, delay positioning
